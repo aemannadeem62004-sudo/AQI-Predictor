@@ -1,6 +1,7 @@
 import requests
 import time
 import pandas as pd
+import hopsworks
 from datetime import datetime, timedelta
 from config import LATITUDE, LONGITUDE, OPENWEATHER_API_KEY, CITY_NAME
 
@@ -10,7 +11,7 @@ def fetch_chunk(start_date, end_date):
     start_unix = int(start_date.timestamp())
     end_unix = int(end_date.timestamp())
 
-    url = "http://api.openweathermap.org/data/2.5/air_pollution/history"
+    url = "https://api.openweathermap.org/data/2.5/air_pollution/history"
     params = {
         "lat": LATITUDE,
         "lon": LONGITUDE,
@@ -74,6 +75,24 @@ def add_features(df):
     df["aqi_change_rate"] = df["aqi_change_rate"].fillna(0)
 
     return df
+def upload_to_feature_store(df):
+    print("\nConnecting to Hopsworks...")
+    project = hopsworks.login(project="Aero_cast")
+    fs = project.get_feature_store()
+
+    print("Creating/getting feature group...")
+    feature_group = fs.get_or_create_feature_group(
+        name="aqi_features",
+        version=1,
+        description="Hourly AQI and pollution features for Rawalpindi",
+        primary_key=["timestamp"],
+        event_time="datetime",
+        time_travel_format="HUDI"
+    )
+
+    print("Inserting data (this may take a few minutes for 16,992 rows)...")
+    feature_group.insert(df)
+    print("Upload complete!")
 
 if __name__ == "__main__":
     print("Fetching raw historical data...")
@@ -112,3 +131,4 @@ if __name__ == "__main__":
 
     df.to_csv("aerocast_features_raw.csv", index=False)
     print("\nSaved to aerocast_features_raw.csv")
+    upload_to_feature_store(df)
