@@ -13,7 +13,7 @@ It is saved here as a record of the working pipeline for the internship
 report and GitHub history. To actually run it, use the Colab notebook.
 """
 
-from google.colab import userdata
+import os
 import hopsworks
 import pandas as pd
 import numpy as np
@@ -31,7 +31,7 @@ import shap
 # ---------------------------------------------------------------------------
 # STEP 1: Connect to Hopsworks and pull the processed feature data
 # ---------------------------------------------------------------------------
-HOPSWORKS_API_KEY = userdata.get('HOPSWORKS_API_KEY')
+HOPSWORKS_API_KEY = os.environ.get('HOPSWORKS_API_KEY')
 
 print("Connecting to Hopsworks...")
 project = hopsworks.login(api_key_value=HOPSWORKS_API_KEY, project="Aero_cast")

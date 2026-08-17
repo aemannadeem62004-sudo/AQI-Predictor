@@ -59,3 +59,6 @@ tzdata==2026.3
 tzlocal==5.4.4
 urllib3==2.7.0
 wrapt==2.3.0
+scikit-learn==1.5.2
+tensorflow==2.18.0
+shap==0.46.0
