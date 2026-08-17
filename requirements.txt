@@ -62,3 +62,4 @@ wrapt==2.3.0
 scikit-learn==1.5.2
 tensorflow==2.18.0
 shap==0.46.0
+matplotlib==3.9.2

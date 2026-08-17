@@ -18,6 +18,7 @@ import hopsworks
 import pandas as pd
 import numpy as np
 import joblib
+import matplotlib.pyplot as plt
 
 from sklearn.linear_model import Ridge
 from sklearn.ensemble import RandomForestRegressor
@@ -206,4 +207,6 @@ explainer = shap.LinearExplainer(ridge_model, X_train)
 shap_values = explainer(X_test)
 
 print("Generating summary plot...")
-shap.summary_plot(shap_values, X_test, feature_names=feature_cols)
+shap.summary_plot(shap_values, X_test, feature_names=feature_cols, show=False)
+plt.savefig("shap_summary_plot.png", bbox_inches="tight")
+print("SHAP plot saved to shap_summary_plot.png")
