@@ -1,0 +1,30 @@
+name: Hourly Feature Update
+
+on:
+  schedule:
+    # Runs every hour, at minute 0 (e.g. 1:00, 2:00, 3:00...)
+    - cron: "0 * * * *"
+  workflow_dispatch:
+    # Lets you manually trigger this from the GitHub Actions tab too
+
+jobs:
+  update-features:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run hourly feature update
+        env:
+          HOPSWORKS_API_KEY: ${{ secrets.HOPSWORKS_API_KEY }}
+          OPENWEATHER_API_KEY: ${{ secrets.OPENWEATHER_API_KEY }}
+        run: python src/hourly_feature_update.py
