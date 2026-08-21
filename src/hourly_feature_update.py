@@ -20,6 +20,7 @@ import os
 import requests
 import pandas as pd
 import hopsworks
+import time
 from datetime import datetime, timedelta
 from config import LATITUDE, LONGITUDE, OPENWEATHER_API_KEY, CITY_NAME
 
@@ -87,19 +88,38 @@ def add_features(df):
     return df
 
 
-def upload_to_feature_store(df):
-    """Insert the new rows into the existing Hopsworks feature group."""
-    print("Connecting to Hopsworks...")
+def upload_to_feature_store(df, max_retries=3):
+    """
+    Insert the new rows into the existing Hopsworks feature group.
+    Includes retry logic - Hopsworks' free-tier servers occasionally
+    drop the connection briefly, so we retry a few times before
+    actually failing.
+    """
     HOPSWORKS_API_KEY = os.environ.get("HOPSWORKS_API_KEY")
-    project = hopsworks.login(api_key_value=HOPSWORKS_API_KEY, project="Aero_cast")
-    fs = project.get_feature_store()
 
-    print("Getting feature group...")
-    feature_group = fs.get_feature_group(name="aqi_features", version=1)
+    for attempt in range(1, max_retries + 1):
+        try:
+            print(f"Connecting to Hopsworks (attempt {attempt}/{max_retries})...")
+            project = hopsworks.login(api_key_value=HOPSWORKS_API_KEY, project="Aero_cast")
+            fs = project.get_feature_store()
 
-    print(f"Inserting {len(df)} rows...")
-    feature_group.insert(df)
-    print("Hourly update complete!")
+            print("Getting feature group...")
+            feature_group = fs.get_feature_group(name="aqi_features", version=1)
+
+            print(f"Inserting {len(df)} rows...")
+            feature_group.insert(df)
+            print("Hourly update complete!")
+            return  # success - exit the function
+
+        except Exception as e:
+            print(f"Attempt {attempt} failed: {e}")
+            if attempt < max_retries:
+                wait_seconds = 10 * attempt  # waits 10s, then 20s
+                print(f"Retrying in {wait_seconds} seconds...")
+                time.sleep(wait_seconds)
+            else:
+                print("All retry attempts failed. Raising the error.")
+                raise
 
 
 if __name__ == "__main__":
