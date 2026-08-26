@@ -14,6 +14,7 @@ In 3 days" separately instead of one combined number.
 
 import os
 import hopsworks
+import time
 import pandas as pd
 import numpy as np
 import joblib
@@ -35,7 +36,20 @@ print("Fetching feature group...")
 feature_group = fs.get_feature_group(name="aqi_features", version=1)
 
 print("Reading data...")
-df = feature_group.read()
+max_retries = 3
+for attempt in range(1, max_retries + 1):
+    try:
+        df = feature_group.read()
+        break  # success
+    except Exception as e:
+        print(f"Read attempt {attempt} failed: {e}")
+        if attempt < max_retries:
+            wait_seconds = 15 * attempt
+            print(f"Retrying in {wait_seconds} seconds...")
+            time.sleep(wait_seconds)
+        else:
+            print("All retry attempts failed.")
+            raise
 
 print(f"Total rows: {len(df)}")
 
