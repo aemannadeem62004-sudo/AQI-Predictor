@@ -1,16 +1,15 @@
 """
 training_pipeline.py
 
-Aerocast - Week 3 Training Pipeline
-Pulls processed AQI features from the Hopsworks Feature Store, builds the
-3-day-ahead prediction target, trains and compares 3 models (Ridge,
-Random Forest, TensorFlow), saves the best model (Ridge) to the Hopsworks
-Model Registry, and generates a SHAP explainability summary plot.
+Aerocast - Day-by-day Training Pipeline (1-day, 2-day, 3-day ahead)
+Pulls processed AQI features from the Hopsworks Feature Store, builds THREE
+prediction targets (24h, 48h, 72h ahead), trains a separate Ridge model for
+each horizon (Ridge was already established as the best-performing model
+type in earlier testing), and saves all three to the Model Registry.
 
-NOTE: This script was developed and run in Google Colab (not locally),
-because of persistent Hopsworks/Delta dependency issues on Windows.
-It is saved here as a record of the working pipeline for the internship
-report and GitHub history. To actually run it, use the Colab notebook.
+This replaces the single 3-day-only model from Week 3 with three models,
+one per forecast day, so the dashboard can show "Tomorrow / In 2 days /
+In 3 days" separately instead of one combined number.
 """
 
 import os
@@ -18,15 +17,9 @@ import hopsworks
 import pandas as pd
 import numpy as np
 import joblib
-import matplotlib.pyplot as plt
 
 from sklearn.linear_model import Ridge
-from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
-from sklearn.preprocessing import StandardScaler
-
-import tensorflow as tf
-import shap
 
 
 # ---------------------------------------------------------------------------
@@ -48,165 +41,106 @@ print(f"Total rows: {len(df)}")
 
 
 # ---------------------------------------------------------------------------
-# STEP 2: Build the prediction target and extra trend features
+# STEP 2: Build THREE prediction targets - 1 day, 2 days, 3 days ahead
 # ---------------------------------------------------------------------------
-# Sort by actual time order first - this matters for both the shift below
-# and for the chronological train/test split later
 df = df.sort_values("datetime").reset_index(drop=True)
 
-# The target is "AQI 3 days (72 hours) from now" - shift the aqi column
-# backwards by 72 rows so each row's target is its own future value
-HOURS_AHEAD = 3 * 24
-df["aqi_target_3day"] = df["aqi"].shift(-HOURS_AHEAD)
+df["aqi_target_1day"] = df["aqi"].shift(-24)
+df["aqi_target_2day"] = df["aqi"].shift(-48)
+df["aqi_target_3day"] = df["aqi"].shift(-72)
 
-# The last 72 rows have no future value to predict, so drop them
-df = df.dropna(subset=["aqi_target_3day"])
+# Drop rows missing the 3-day target (the most restrictive) so all three
+# targets are available for the same set of rows - keeps train/test
+# consistent across all three models
+df = df.dropna(subset=["aqi_target_1day", "aqi_target_2day", "aqi_target_3day"])
 
-# Rolling averages give the model a sense of recent trend, not just a
-# single snapshot in time
 df["aqi_rolling_24h"] = df["aqi"].rolling(window=24, min_periods=1).mean()
 df["pm2_5_rolling_24h"] = df["pm2_5"].rolling(window=24, min_periods=1).mean()
 
 print(f"Rows after processing: {len(df)}")
-print(df[["datetime", "aqi", "aqi_target_3day", "aqi_rolling_24h"]].head())
 
 
 # ---------------------------------------------------------------------------
 # STEP 3: Train/test split - CHRONOLOGICAL, not random
 # ---------------------------------------------------------------------------
-# Random splitting would leak future information into training. Since this
-# is a time series, train on the earlier 85% and test on the most recent 15%.
 feature_cols = ["aqi", "co", "no", "no2", "o3", "so2", "pm2_5", "pm10", "nh3",
                  "hour", "day", "month", "aqi_change_rate",
                  "aqi_rolling_24h", "pm2_5_rolling_24h"]
-target_col = "aqi_target_3day"
+
+target_cols = {
+    "1day": "aqi_target_1day",
+    "2day": "aqi_target_2day",
+    "3day": "aqi_target_3day",
+}
 
 split_index = int(len(df) * 0.85)
 train_df = df.iloc[:split_index]
 test_df = df.iloc[split_index:]
 
 X_train = train_df[feature_cols]
-y_train = train_df[target_col]
 X_test = test_df[feature_cols]
-y_test = test_df[target_col]
 
 print(f"Training set: {len(X_train)} rows")
 print(f"Test set: {len(X_test)} rows")
 
 
 # ---------------------------------------------------------------------------
-# STEP 4: Train and compare 3 models
+# STEP 4: Train one Ridge model per horizon (same inputs, different targets)
 # ---------------------------------------------------------------------------
+trained_models = {}
 results = {}
 
-# --- Model 1: Ridge Regression ---
-print("Training Ridge Regression...")
-ridge_model = Ridge(alpha=1.0)
-ridge_model.fit(X_train, y_train)
-ridge_preds = ridge_model.predict(X_test)
-results["Ridge Regression"] = {
-    "RMSE": np.sqrt(mean_squared_error(y_test, ridge_preds)),
-    "MAE": mean_absolute_error(y_test, ridge_preds),
-    "R2": r2_score(y_test, ridge_preds)
-}
+for horizon_name, target_col in target_cols.items():
+    print(f"\nTraining Ridge model for {horizon_name}...")
+    y_train = train_df[target_col]
+    y_test = test_df[target_col]
 
-# --- Model 2: Random Forest ---
-# max_depth and min_samples_leaf are set to limit overfitting - an
-# earlier untuned version overfit badly on this data
-print("Training Random Forest...")
-rf_model = RandomForestRegressor(n_estimators=100, max_depth=8, min_samples_leaf=20,
-                                  random_state=42, n_jobs=-1)
-rf_model.fit(X_train, y_train)
-rf_preds = rf_model.predict(X_test)
-results["Random Forest"] = {
-    "RMSE": np.sqrt(mean_squared_error(y_test, rf_preds)),
-    "MAE": mean_absolute_error(y_test, rf_preds),
-    "R2": r2_score(y_test, rf_preds)
-}
+    model = Ridge(alpha=1.0)
+    model.fit(X_train, y_train)
+    preds = model.predict(X_test)
 
-print("\nResults so far:")
-for model_name, metrics in results.items():
-    print(f"\n{model_name}:")
-    for metric_name, value in metrics.items():
-        print(f"  {metric_name}: {value:.4f}")
+    results[horizon_name] = {
+        "RMSE": np.sqrt(mean_squared_error(y_test, preds)),
+        "MAE": mean_absolute_error(y_test, preds),
+        "R2": r2_score(y_test, preds)
+    }
+    trained_models[horizon_name] = model
 
-# --- Model 3: TensorFlow Neural Network ---
-# Neural networks need scaled inputs (mean 0, std 1) to train properly
-scaler = StandardScaler()
-X_train_scaled = scaler.fit_transform(X_train)
-X_test_scaled = scaler.transform(X_test)
-
-print("Building TensorFlow model...")
-tf_model = tf.keras.Sequential([
-    tf.keras.layers.Dense(64, activation='relu', input_shape=(X_train_scaled.shape[1],)),
-    tf.keras.layers.Dense(32, activation='relu'),
-    tf.keras.layers.Dense(1)
-])
-
-tf_model.compile(optimizer='adam', loss='mse', metrics=['mae'])
-
-print("Training TensorFlow model...")
-history = tf_model.fit(
-    X_train_scaled, y_train,
-    validation_split=0.1,
-    epochs=30,
-    batch_size=32,
-    verbose=1
-)
-
-tf_preds = tf_model.predict(X_test_scaled).flatten()
-results["TensorFlow Neural Network"] = {
-    "RMSE": np.sqrt(mean_squared_error(y_test, tf_preds)),
-    "MAE": mean_absolute_error(y_test, tf_preds),
-    "R2": r2_score(y_test, tf_preds)
-}
-
-print("\nAll results:")
-for model_name, metrics in results.items():
-    print(f"\n{model_name}:")
-    for metric_name, value in metrics.items():
-        print(f"  {metric_name}: {value:.4f}")
-
-# CONCLUSION: Ridge Regression performed best (lowest RMSE/MAE, highest R2).
-# 3-day-ahead AQI prediction from a single time snapshot is a genuinely hard
-# problem - the simpler linear model generalized better than Random Forest
-# or the neural network, both of which showed signs of overfitting.
+    print(f"  RMSE: {results[horizon_name]['RMSE']:.4f}")
+    print(f"  MAE:  {results[horizon_name]['MAE']:.4f}")
+    print(f"  R2:   {results[horizon_name]['R2']:.4f}")
 
 
 # ---------------------------------------------------------------------------
-# STEP 5: Save the best model (Ridge) to the Hopsworks Model Registry
+# STEP 5: Save all three models to the Hopsworks Model Registry
 # ---------------------------------------------------------------------------
-# Save the trained model to a local file first
-joblib.dump(ridge_model, "ridge_model.pkl")
-
-print("Connecting to Model Registry...")
+print("\nConnecting to Model Registry...")
 mr = project.get_model_registry()
 
-# Register the model along with its performance metrics
-model = mr.python.create_model(
-    name="aqi_ridge_model",
-    metrics={
-        "rmse": results["Ridge Regression"]["RMSE"],
-        "mae": results["Ridge Regression"]["MAE"],
-        "r2": results["Ridge Regression"]["R2"]
-    },
-    description="Ridge Regression model predicting AQI 3 days ahead for Rawalpindi. "
-                "Best of 3 models compared (Ridge, Random Forest, TensorFlow)."
-)
+model_names = {
+    "1day": "aqi_ridge_1day",
+    "2day": "aqi_ridge_2day",
+    "3day": "aqi_ridge_3day",
+}
 
-print("Uploading model...")
-model.save("ridge_model.pkl")
-print("Model saved to registry!")
+for horizon_name, model in trained_models.items():
+    reg_name = model_names[horizon_name]
+    local_filename = f"ridge_model_{horizon_name}.pkl"
 
+    joblib.dump(model, local_filename)
 
-# ---------------------------------------------------------------------------
-# STEP 6: SHAP explainability - which features matter most, and how
-# ---------------------------------------------------------------------------
-print("Creating SHAP explainer...")
-explainer = shap.LinearExplainer(ridge_model, X_train)
-shap_values = explainer(X_test)
+    print(f"Uploading {reg_name}...")
+    model_entry = mr.python.create_model(
+        name=reg_name,
+        metrics={
+            "rmse": results[horizon_name]["RMSE"],
+            "mae": results[horizon_name]["MAE"],
+            "r2": results[horizon_name]["R2"]
+        },
+        description=f"Ridge Regression model predicting AQI {horizon_name.replace('day', ' day(s)')} "
+                     f"ahead for Rawalpindi."
+    )
+    model_entry.save(local_filename)
+    print(f"{reg_name} saved to registry!")
 
-print("Generating summary plot...")
-shap.summary_plot(shap_values, X_test, feature_names=feature_cols, show=False)
-plt.savefig("shap_summary_plot.png", bbox_inches="tight")
-print("SHAP plot saved to shap_summary_plot.png")
+print("\nAll three models trained and saved successfully!")
