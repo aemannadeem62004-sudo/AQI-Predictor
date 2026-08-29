@@ -9,6 +9,12 @@ Built as part of the 10Pearls data science internship, following the Feature/Tra
 
 ---
 
+## Preview
+
+![Aerocast Dashboard](Assets/dashboard.JPG)
+
+![AQI Trend Forecast](Assets/Aqi_trends.JPG)
+
 ## Overview
 
 Aerocast predicts AQI for Rawalpindi 1, 2, and 3 days ahead using historical pollution data, and presents current conditions, forecasts, and trends through a Streamlit dashboard — with hazardous air quality alerts built in.
@@ -36,7 +42,7 @@ OpenWeather API  ──raw data──>  Feature Pipeline  ──features──> 
 - **Live current AQI** for Rawalpindi, with color-coded severity indicator
 - **3-day-ahead AQI forecast**, using 3 independently trained Ridge Regression models (1-day, 2-day, 3-day horizons)
 - **Hazardous air quality alerts**, automatically triggered when any forecasted day crosses the "Poor" threshold
-- **Current weather conditions** (temperature, wind, humidity, pressure) and PM2.5 concentration with health-category labeling
+- **Current weather conditions** (temperature, wind, humidity, pressure) and PM2.5 concentration
 - **7-day historical AQI trend**, connected directly to the 3-day forecast on the same chart
 - **Fully automated pipeline**: hourly feature updates and daily model retraining via GitHub Actions — no manual intervention required
 
@@ -70,18 +76,6 @@ AQI-Predictor/
 └── REPORT.md                       # Full project report
 ```
 
-## How It Satisfies the Project Requirements
-
-| Requirement | Status | Notes |
-|---|---|---|
-| **1. Feature pipeline** — fetch raw data, compute features + targets, store in Feature Store | ✅ Done | `feature_pipeline.py` / `hourly_feature_update.py`. Includes time-based features (hour, day, month) and derived features (AQI change rate, rolling 24h averages). |
-| **2. Backfill historical data** | ✅ Done | 2 years of historical data (16,992 rows) backfilled into Hopsworks. |
-| **3. Training pipeline** — fetch from Feature Store, train + evaluate, store in Model Registry | ✅ Done | `training_pipeline.py`. Evaluated Ridge Regression, Random Forest, and TensorFlow; Ridge selected as best performer (RMSE 0.7156, MAE 0.5719, R² 0.1216). SHAP used for feature importance. |
-| **4. Automate pipeline runs** (hourly feature updates, daily training) | ✅ Done | GitHub Actions workflows — feature updates run every hour, training runs daily. |
-| **5. Web app / dashboard** — loads model + features from Feature Store, shows predictions | ✅ Done | `app.py`, deployed on Streamlit Community Cloud. Shows current AQI, 3-day forecast, hazardous alerts, weather conditions, and trend chart. |
-| **6. Hazardous AQI alerts** | ✅ Done | Automatic banner alert when any forecasted day is "Poor" or worse. |
-| **7. SHAP/LIME feature importance** | ✅ Done | SHAP analysis performed during model evaluation. |
-
 **⚠️ Known limitation:** Since Aug 26, 2026, a platform-side bug on Hopsworks' free tier has caused the offline feature store's materialization job to fail (confirmed via error logs, execution history, and a second independent Hopsworks project experiencing the same issue). As a result, the dashboard's "Current AQI" timestamp and 7-day trend chart are showing data current as of Aug 25, rather than live. The hourly data ingestion pipeline itself is confirmed working correctly (verified via GitHub Actions logs) — the failure is isolated to Hopsworks' backend storage layer, not this project's code. Full investigation, evidence, and timeline are documented in [REPORT.md](./REPORT.md).
 
 ## Running Locally
@@ -113,4 +107,4 @@ AQI-Predictor/
 ## Author
 
 **Aeman Nadeem**
-Data Science Intern, 10Pearls
+
