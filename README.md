@@ -44,7 +44,7 @@ OpenWeather API  ──raw data──>  Feature Pipeline  ──features──> 
 - **Hazardous air quality alerts**, automatically triggered when any forecasted day crosses the "Poor" threshold
 - **Current weather conditions** (temperature, wind, humidity, pressure) and PM2.5 concentration
 - **7-day historical AQI trend**, connected directly to the 3-day forecast on the same chart
-- **Fully automated pipeline**: hourly feature updates and daily model retraining via GitHub Actions — no manual intervention required
+- **Fully automated pipeline**: hourly feature updates and daily model retraining via GitHub Actions , no manual intervention required
 
 ## Tech Stack
 
