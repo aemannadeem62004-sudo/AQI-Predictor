@@ -1,4 +1,4 @@
-# 🌫️ Aerocast — Rawalpindi AQI Predictor
+# 🌫️ Aerocast: Rawalpindi AQI Predictor
 
 Aerocast is an end-to-end, serverless Air Quality Index (AQI) prediction system for Rawalpindi, Pakistan. It fetches live pollution data every hour, stores it in a feature store, trains machine learning models to forecast AQI up to 3 days ahead, and displays everything on a live, interactive dashboard.
 
@@ -17,7 +17,7 @@ Built as part of the 10Pearls data science internship, following the Feature/Tra
 
 ## Overview
 
-Aerocast predicts AQI for Rawalpindi 1, 2, and 3 days ahead using historical pollution data, and presents current conditions, forecasts, and trends through a Streamlit dashboard — with hazardous air quality alerts built in.
+Aerocast predicts AQI for Rawalpindi 1, 2, and 3 days ahead using historical pollution data, and presents current conditions, forecasts, and trends through a Streamlit dashboard , with hazardous air quality alerts built in.
 
 ## Architecture
 
@@ -44,7 +44,7 @@ OpenWeather API  ──raw data──>  Feature Pipeline  ──features──> 
 - **Hazardous air quality alerts**, automatically triggered when any forecasted day crosses the "Poor" threshold
 - **Current weather conditions** (temperature, wind, humidity, pressure) and PM2.5 concentration
 - **7-day historical AQI trend**, connected directly to the 3-day forecast on the same chart
-- **Fully automated pipeline**: hourly feature updates and daily model retraining via GitHub Actions — no manual intervention required
+- **Fully automated pipeline**: hourly feature updates and daily model retraining via GitHub Actions , no manual intervention required
 
 ## Tech Stack
 
@@ -76,7 +76,7 @@ AQI-Predictor/
 └── REPORT.md                       # Full project report
 ```
 
-**⚠️ Known limitation:** Since Aug 26, 2026, a platform-side bug on Hopsworks' free tier has caused the offline feature store's materialization job to fail (confirmed via error logs, execution history, and a second independent Hopsworks project experiencing the same issue). As a result, the dashboard's "Current AQI" timestamp and 7-day trend chart are showing data current as of Aug 25, rather than live. The hourly data ingestion pipeline itself is confirmed working correctly (verified via GitHub Actions logs) — the failure is isolated to Hopsworks' backend storage layer, not this project's code. Full investigation, evidence, and timeline are documented in [REPORT.md](./REPORT.md).
+**⚠️ Known limitation:** Since Aug 26, 2026, a platform-side bug on Hopsworks' free tier has caused the offline feature store's materialization job to fail (confirmed via error logs, execution history, and a second independent Hopsworks project experiencing the same issue). As a result, the dashboard's "Current AQI" timestamp and 7-day trend chart are showing data current as of Aug 25, rather than live. The hourly data ingestion pipeline itself is confirmed working correctly (verified via GitHub Actions logs) , the failure is isolated to Hopsworks' backend storage layer, not this project's code. Full investigation, evidence, and timeline are documented in [REPORT.md](./REPORT.md).
 
 ## Running Locally
 
