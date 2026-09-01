@@ -241,7 +241,7 @@ with main_col:
     with header_col2:
         if round(worst_value) >= HAZARDOUS_THRESHOLD:
             st.markdown(f"""
-                   <div style="
+                           <div style="
             background: #3B1414;
             border: 1px solid #E24B4A;
             border-radius: 12px;
@@ -252,6 +252,7 @@ with main_col:
             display: flex;
             flex-direction: column;
             justify-content: center;
+            margin-left: 40px;
         ">
                 <div style="display:flex;align-items:center;gap:8px;">
                     <span style="font-size:20px;">⚠️</span>
@@ -390,6 +391,25 @@ with scale_col:
             <div style="width:18px;height:18px;border-radius:50%;background:#9B59B6;"></div>
             <span style="font-size:15px;color:#CCC;">5 - Very Poor</span>
         </div>
-        <p style="color:#666;font-size:12px;margin-top:20px;">OpenWeather Air Pollution Index</p>
+               <p style="color:#666;font-size:12px;margin-top:20px;">OpenWeather Air Pollution Index</p>
+    </div>
+
+    <div style="background:#1A1D24;border:1px solid #333;border-radius:12px;
+         padding:22px 18px;margin-left: 12px;margin-top:16px;">
+        <p style="color:#888;font-size:15px;letter-spacing:1px;margin-bottom:16px;">DEPLOYED MODELS</p>
+        <p style="color:#EEE;font-size:14px;font-weight:600;margin-bottom:2px;">Day 1 (0-24h)</p>
+        <p style="color:#999;font-size:13px;margin-bottom:14px;">Ridge Regression · R² 0.28</p>
+        <p style="color:#EEE;font-size:14px;font-weight:600;margin-bottom:2px;">Day 2 (24-48h)</p>
+        <p style="color:#999;font-size:13px;margin-bottom:14px;">Ridge Regression · R² 0.07</p>
+        <p style="color:#EEE;font-size:14px;font-weight:600;margin-bottom:2px;">Day 3 (48-72h)</p>
+        <p style="color:#999;font-size:13px;margin-bottom:0px;">Ridge Regression · R² 0.03</p>
+    </div>
+
+    <div style="background:#1A1D24;border:1px solid #333;border-radius:12px;
+         padding:22px 18px;margin-left: 12px;margin-top:16px;">
+        <p style="color:#888;font-size:15px;letter-spacing:1px;margin-bottom:16px;">DOCUMENTATION</p>
+        <p style="margin-bottom:12px;"><a href="https://github.com/aemannadeem62004-sudo/AQI-Predictor" target="_blank" style="color:#378ADD;text-decoration:none;">GitHub Repository</a></p>
+        <p style="margin-bottom:12px;"><a href="https://github.com/aemannadeem62004-sudo/AQI-Predictor/blob/main/REPORT.md" target="_blank" style="color:#378ADD;text-decoration:none;">Final Report</a></p>
+        <p style="margin-bottom:0px;"><a href="https://github.com/aemannadeem62004-sudo/AQI-Predictor/blob/main/notebooks/AQI_EDA.ipynb" target="_blank" style="color:#378ADD;text-decoration:none;">Build Journey & EDA</a></p>
     </div>
     """, unsafe_allow_html=True)

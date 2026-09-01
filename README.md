@@ -76,7 +76,7 @@ AQI-Predictor/
 └── REPORT.md                       # Full project report
 ```
 
-**⚠️ Known limitation:** Since Aug 26, 2026, a platform-side bug on Hopsworks' free tier has caused the offline feature store's materialization job to fail (confirmed via error logs, execution history, and a second independent Hopsworks project experiencing the same issue). As a result, the dashboard's "Current AQI" timestamp and 7-day trend chart are showing data current as of Aug 25, rather than live. The hourly data ingestion pipeline itself is confirmed working correctly (verified via GitHub Actions logs) , the failure is isolated to Hopsworks' backend storage layer, not this project's code. Full investigation, evidence, and timeline are documented in [REPORT.md](./REPORT.md).
+**Resolved incident:** Between Aug 26 and Sep 1, 2026, a platform-side bug on Hopsworks' free tier caused the offline feature store's materialization job to fail, resulting in the dashboard temporarily displaying stale data. This was confirmed via error logs, execution history, and a second independent Hopsworks project experiencing the same issue at the same time , isolated to Hopsworks' backend, not this project's code. The issue resolved itself on Sep 1, and the dashboard is now displaying live, current data as intended. Full investigation, evidence, and timeline are documented in [REPORT.md](./REPORT.md).
 
 ## Running Locally
 
