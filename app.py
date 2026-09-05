@@ -21,6 +21,7 @@ import requests
 import pandas as pd
 import streamlit as st
 import hopsworks
+import plotly.graph_objects as go
 from datetime import datetime, timedelta
 
 
@@ -76,6 +77,103 @@ def current_emoji_color(aqi_value):
     }
     return colors[rounded]
 
+
+def get_epa_aqi_from_pm25(pm25):
+    """
+    Converts a PM2.5 concentration (µg/m³) into the official US EPA AQI (0-500),
+    using the EPA's breakpoint table as revised in May 2024.
+    """
+    breakpoints = [
+        (0.0, 9.0, 0, 50),
+        (9.1, 35.4, 51, 100),
+        (35.5, 55.4, 101, 150),
+        (55.5, 125.4, 151, 200),
+        (125.5, 225.4, 201, 300),
+        (225.5, 325.4, 301, 400),
+        (325.5, 500.4, 401, 500),
+    ]
+    for c_low, c_high, aqi_low, aqi_high in breakpoints:
+        if c_low <= pm25 <= c_high:
+            aqi = ((aqi_high - aqi_low) / (c_high - c_low)) * (pm25 - c_low) + aqi_low
+            return round(aqi)
+    return 500
+
+def get_epa_aqi_label(aqi_value):
+    if aqi_value <= 50: return "Good", "#2ECC71"
+    elif aqi_value <= 100: return "Moderate", "#F1C40F"
+    elif aqi_value <= 150: return "Unhealthy (Sensitive)", "#E67E22"
+    elif aqi_value <= 200: return "Unhealthy", "#E24B4A"
+    elif aqi_value <= 300: return "Very Unhealthy", "#9B59B6"
+    else: return "Hazardous", "#7E0023"
+
+
+def get_epa_aqi_label(aqi_value):
+    if aqi_value <= 50: return "Good", "#2ECC71"
+    elif aqi_value <= 100: return "Moderate", "#F1C40F"
+    elif aqi_value <= 150: return "Unhealthy for Sensitive Groups", "#E67E22"
+    elif aqi_value <= 200: return "Unhealthy", "#E24B4A"
+    elif aqi_value <= 300: return "Very Unhealthy", "#9B59B6"
+    else: return "Hazardous", "#7E0023"
+
+
+def render_aqi_gauge(aqi_value: float, color: str, height: int = 220):
+    """Semicircular EPA AQI gauge (0-500), styled for Aerocast's dark theme."""
+    fig = go.Figure(go.Indicator(
+        mode="gauge+number",
+        value=aqi_value,
+        number={"font": {"size": 34, "color": "#FFFFFF"}},
+        gauge={
+            "axis": {"range": [0, 500], "tickwidth": 1,
+                     "tickcolor": "#8A8F98", "tickfont": {"color": "#8A8F98", "size": 9}},
+            "bar": {"color": "rgba(0,0,0,0)"},
+            "bgcolor": "rgba(0,0,0,0)",
+            "borderwidth": 0,
+            "steps": [
+                {"range": [0, 50], "color": "#2ECC71"},
+                {"range": [50, 100], "color": "#F1C40F"},
+                {"range": [100, 150], "color": "#E67E22"},
+                {"range": [150, 200], "color": "#E24B4A"},
+                {"range": [200, 300], "color": "#9B59B6"},
+                {"range": [300, 500], "color": "#7E0023"},
+            ],
+             "threshold": {                     
+                "line": {"color": "#FFFFFF", "width": 5},
+                "thickness": 0.9,
+                "value": aqi_value,
+            },
+        },
+    ))
+    fig.update_layout(
+        height=height,
+        margin=dict(l=10, r=10, t=10, b=0),
+        paper_bgcolor="rgba(0,0,0,0)",
+        font={"color": "#FFFFFF", "family": "sans-serif"},
+    )
+    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+
+
+def build_category_pm25_map(df):
+    """
+    Maps each OpenWeather AQI category (1-5) to its average historical PM2.5
+    concentration, so a forecasted category can be converted into an
+    estimated real-world PM2.5 value.
+    """
+    return df.groupby("aqi")["pm2_5"].mean().to_dict()
+
+def estimate_pm25_from_category(predicted_category, category_map):
+    """
+    Converts a continuous predicted AQI category (e.g. 4.3) into an estimated
+    PM2.5 concentration, by interpolating between the historical average
+    PM2.5 values of the two nearest categories.
+    """
+    import math
+    keys = sorted(category_map.keys())
+    low = max(min(int(math.floor(predicted_category)), max(keys)), min(keys))
+    high = max(min(int(math.ceil(predicted_category)), max(keys)), min(keys))
+    if low == high:
+        return category_map[low]
+    frac = predicted_category - low
+    return category_map[low] + frac * (category_map[high] - category_map[low])
 
 
 # ---------------------------------------------------------------------------
@@ -191,8 +289,14 @@ predictions = {}
 for horizon, model in models.items():
     predictions[horizon] = model.predict(X_latest)[0]
 
-current_aqi = latest_row["aqi"]
-current_label, current_emoji = get_aqi_label(current_aqi)
+category_pm25_map = build_category_pm25_map(df)
+epa_predictions = {}
+for horizon, cat_value in predictions.items():
+    estimated_pm25 = estimate_pm25_from_category(cat_value, category_pm25_map)
+    epa_predictions[horizon] = get_epa_aqi_from_pm25(estimated_pm25)
+
+current_aqi_epa = get_epa_aqi_from_pm25(latest_row["pm2_5"])
+current_label, current_color = get_epa_aqi_label(current_aqi_epa)
 
 
 # ---------------------------------------------------------------------------
@@ -201,9 +305,9 @@ current_label, current_emoji = get_aqi_label(current_aqi)
 main_col, scale_col = st.columns([4, 1.3])
 
 with main_col:
-    worst_horizon = max(predictions, key=predictions.get)
-    worst_value = predictions[worst_horizon]
-    worst_label, _ = get_aqi_label(worst_value)
+    worst_horizon = max(epa_predictions, key=epa_predictions.get)
+    worst_value = epa_predictions[worst_horizon]
+    worst_label, _ = get_epa_aqi_label(worst_value)
     worst_day_text = {"1day": "tomorrow", "2day": "in 2 days", "3day": "in 3 days"}[worst_horizon]
 
     header_col1, header_col2 = st.columns([3, 2])
@@ -239,7 +343,7 @@ with main_col:
         """, unsafe_allow_html=True)
 
     with header_col2:
-        if round(worst_value) >= HAZARDOUS_THRESHOLD:
+        if round(worst_value) >= 151: # EPA "Unhealthy" or worse
             st.markdown(f"""
                            <div style="
             background: #3B1414;
@@ -256,26 +360,25 @@ with main_col:
         ">
                 <div style="display:flex;align-items:center;gap:8px;">
                     <span style="font-size:20px;">⚠️</span>
-                    <span style="font-weight:600;color:#E24B4A;">Hazardous Air Quality</span>
+                    <span style="font-weight:600;color:#E24B4A;">Poor Air Quality Alert</span>
                 </div>
                 <p style="margin:6px 0 0 0;font-size:14px;color:#DDD;">
-                    Expected {worst_day_text}: <b>{worst_label}</b> (AQI ≈ {worst_value:.1f}).
+                                       Expected {worst_day_text}: <b>{worst_label}</b> (AQI ≈ {worst_value}).
                     Consider limiting outdoor activity.
                 </p>
             </div>
             """, unsafe_allow_html=True)
 
-    # --- Current AQI ---
+    
+           # --- Current AQI (US EPA scale, 0-500, computed from PM2.5) ---
     st.markdown(f"""
         <p style="color:#888;font-size:16px;margin-top:6px;margin-bottom:4px;">
         Current AQI ({latest_row['datetime'].strftime('%d %b, %H:%M')})
     </p>
-    <div style="display:flex;align-items:center;gap:12px;">
-        <span style="font-size:40px;font-weight:600;">{current_aqi:.0f}</span>
-        <div style="width:32px;height:32px;border-radius:50%;background:{current_emoji_color(current_aqi)};
-             animation: pulse 2s ease-in-out infinite;"></div>
-    </div>
-    <p style="color:#888;font-size:14px;margin-top:4px;">{current_label}</p>
+    """, unsafe_allow_html=True)
+    render_aqi_gauge(current_aqi_epa, current_color)
+    st.markdown(f"""
+    <p style="color:#888;font-size:14px;text-align:center;margin-top:-15px;">{current_label} (US EPA AQI)</p>
     """, unsafe_allow_html=True)
 
         # --- Current Conditions: Temperature, Wind, Humidity, Pressure, PM2.5 ---
@@ -321,9 +424,8 @@ with main_col:
     card_cols = st.columns(3)
 
     for i, horizon in enumerate(["1day", "2day", "3day"]):
-        pred_value = predictions[horizon]
-        pred_label, _ = get_aqi_label(pred_value)
-        pred_color = current_emoji_color(pred_value)
+        pred_value = epa_predictions[horizon]
+        pred_label, pred_color = get_epa_aqi_label(pred_value)
 
         with card_cols[i]:
             st.markdown(f"""
@@ -332,8 +434,8 @@ with main_col:
                 <p style="color:#888;font-size:12px;letter-spacing:1px;margin-bottom:8px;">
                     {day_labels[horizon].upper()}
                 </p>
-                <p style="font-size:32px;font-weight:700;color:{pred_color};margin:0;">
-                    {pred_value:.1f}
+                    <p style="font-size:32px;font-weight:700;color:{pred_color};margin:0;">
+                    {pred_value}
                 </p>
                 <p style="color:#AAA;font-size:14px;margin-top:6px;">{pred_label}</p>
             </div>
@@ -345,21 +447,22 @@ with main_col:
     st.markdown("<div style='margin-top: 8px;'></div>", unsafe_allow_html=True)
 
     recent_df = df.tail(24 * 7).copy()  # last 7 days
+    recent_df["epa_aqi"] = recent_df["pm2_5"].apply(get_epa_aqi_from_pm25)
     last_time = recent_df["datetime"].iloc[-1]
-    last_aqi = recent_df["aqi"].iloc[-1]
+    last_epa_aqi = recent_df["epa_aqi"].iloc[-1]
 
     forecast_times = [last_time + timedelta(hours=24 * i) for i in (1, 2, 3)]
-    forecast_values = [predictions["1day"], predictions["2day"], predictions["3day"]]
+    forecast_values = [epa_predictions["1day"], epa_predictions["2day"], epa_predictions["3day"]]
 
     hist_part = pd.DataFrame({
         "datetime": recent_df["datetime"],
-        "Historical AQI": recent_df["aqi"],
+        "Historical AQI": recent_df["epa_aqi"],
         "Forecast AQI": [None] * len(recent_df),
     })
     forecast_part = pd.DataFrame({
         "datetime": [last_time] + forecast_times,
         "Historical AQI": [None] * 4,
-        "Forecast AQI": [last_aqi] + forecast_values,
+        "Forecast AQI": [last_epa_aqi] + forecast_values,
     })
 
     chart_df = pd.concat([hist_part, forecast_part], ignore_index=True).set_index("datetime")
@@ -370,28 +473,31 @@ with scale_col:
     st.markdown("""
     <div style="background:#1A1D24;border:1px solid #333;border-radius:12px;
          padding:22px 18px;padding-top: 24px; margin-left: 12px;">
-        <p style="color:#888;font-size:15px;letter-spacing:1px;margin-bottom:18px;">AQI SCALE</p>
+        <p style="color:#888;font-size:15px;letter-spacing:1px;margin-bottom:18px;">AQI SCALE (US EPA)</p>
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
             <div style="width:18px;height:18px;border-radius:50%;background:#2ECC71;"></div>
-            <span style="font-size:15px;color:#CCC;">1 - Good</span>
+            <span style="font-size:15px;color:#CCC;">0-50 Good</span>
         </div>
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
             <div style="width:18px;height:18px;border-radius:50%;background:#F1C40F;"></div>
-            <span style="font-size:15px;color:#CCC;">2 - Fair</span>
+            <span style="font-size:15px;color:#CCC;">51-100 Moderate</span>
         </div>
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
             <div style="width:18px;height:18px;border-radius:50%;background:#E67E22;"></div>
-            <span style="font-size:15px;color:#CCC;">3 - Moderate</span>
+            <span style="font-size:15px;color:#CCC;">101-150 Unhealthy for Sensitive Groups)</span>
         </div>
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
             <div style="width:18px;height:18px;border-radius:50%;background:#E24B4A;"></div>
-            <span style="font-size:15px;color:#CCC;">4 - Poor</span>
+            <span style="font-size:15px;color:#CCC;">151-200 Unhealthy</span>
         </div>
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
             <div style="width:18px;height:18px;border-radius:50%;background:#9B59B6;"></div>
-            <span style="font-size:15px;color:#CCC;">5 - Very Poor</span>
+            <span style="font-size:15px;color:#CCC;">201-300 Very Unhealthy</span>
         </div>
-               <p style="color:#666;font-size:12px;margin-top:20px;">OpenWeather Air Pollution Index</p>
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
+            <div style="width:18px;height:18px;border-radius:50%;background:#7E0023;"></div>
+            <span style="font-size:15px;color:#CCC;">301-500 Hazardous</span>
+        </div>
     </div>
 
     <div style="background:#1A1D24;border:1px solid #333;border-radius:12px;
@@ -401,7 +507,7 @@ with scale_col:
         <p style="color:#999;font-size:13px;margin-bottom:14px;">Ridge Regression · R² 0.28</p>
         <p style="color:#EEE;font-size:14px;font-weight:600;margin-bottom:2px;">Day 2 (24-48h)</p>
         <p style="color:#999;font-size:13px;margin-bottom:14px;">Ridge Regression · R² 0.07</p>
-        <p style="color:#EEE;font-size:14px;font-weight:600;margin-bottom:2px;">Day 3 (48-72h)</p>
+        <p style="color:#EEE;font-size:14px;font-weight:600;margin-bottom:0px;">Day 3 (48-72h)</p>
         <p style="color:#999;font-size:13px;margin-bottom:0px;">Ridge Regression · R² 0.03</p>
     </div>
 
@@ -410,6 +516,7 @@ with scale_col:
         <p style="color:#888;font-size:15px;letter-spacing:1px;margin-bottom:16px;">DOCUMENTATION</p>
         <p style="margin-bottom:12px;"><a href="https://github.com/aemannadeem62004-sudo/AQI-Predictor" target="_blank" style="color:#378ADD;text-decoration:none;">GitHub Repository</a></p>
         <p style="margin-bottom:12px;"><a href="https://github.com/aemannadeem62004-sudo/AQI-Predictor/blob/main/REPORT.md" target="_blank" style="color:#378ADD;text-decoration:none;">Final Report</a></p>
-        <p style="margin-bottom:0px;"><a href="https://github.com/aemannadeem62004-sudo/AQI-Predictor/blob/main/notebooks/AQI_EDA.ipynb" target="_blank" style="color:#378ADD;text-decoration:none;">Build Journey & EDA</a></p>
+        <p style="margin-bottom:12px;"><a href="https://github.com/aemannadeem62004-sudo/AQI-Predictor/blob/main/notebooks/AQI_EDA.ipynb" target="_blank" style="color:#378ADD;text-decoration:none;">Build Journey & EDA</a></p>
+                <p style="margin-bottom:0px;"><a href="https://github.com/aemannadeem62004-sudo/AQI-Predictor/blob/main/notebooks/SHAP_Analysis.ipynb" target="_blank" style="color:#378ADD;text-decoration:none;">Model Explainability (SHAP)</a></p>
     </div>
     """, unsafe_allow_html=True)

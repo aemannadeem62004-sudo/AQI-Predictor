@@ -64,3 +64,4 @@ tensorflow==2.18.0
 shap==0.46.0
 matplotlib==3.9.2
 streamlit==1.39.0
+plotly

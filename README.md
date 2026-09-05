@@ -1,6 +1,6 @@
 # 🌫️ Aerocast: Rawalpindi AQI Predictor
 
-Aerocast is an end-to-end, serverless Air Quality Index (AQI) prediction system for Rawalpindi, Pakistan. It fetches live pollution data every hour, stores it in a feature store, trains machine learning models to forecast AQI up to 3 days ahead, and displays everything on a live, interactive dashboard.
+Aerocast is an end-to-end, serverless Air Quality Index (AQI) prediction system for Rawalpindi, Pakistan. It fetches live pollution data every hour, stores it in a feature store, trains machine learning models to forecast AQI up to 3 days ahead, and displays everything on a live, interactive dashboard using the official US EPA AQI (0–500) scale.
 
 Built as part of the 10Pearls data science internship, following the Feature/Training/Inference (FTI) pipeline architecture.
 
@@ -17,7 +17,7 @@ Built as part of the 10Pearls data science internship, following the Feature/Tra
 
 ## Overview
 
-Aerocast predicts AQI for Rawalpindi 1, 2, and 3 days ahead using historical pollution data, and presents current conditions, forecasts, and trends through a Streamlit dashboard , with hazardous air quality alerts built in.
+Aerocast predicts AQI for Rawalpindi 1, 2, and 3 days ahead using historical pollution data, and presents current conditions, forecasts, and trends through a Streamlit dashboard, with hazardous air quality alerts built in. Predictions are converted from the model's native category output into the real US EPA 0–500 AQI scale, computed from an estimated PM2.5 concentration via the official EPA breakpoint formula.
 
 ## Architecture
 
@@ -45,6 +45,7 @@ OpenWeather API  ──raw data──>  Feature Pipeline  ──features──> 
 - **Current weather conditions** (temperature, wind, humidity, pressure) and PM2.5 concentration
 - **7-day historical AQI trend**, connected directly to the 3-day forecast on the same chart
 - **Fully automated pipeline**: hourly feature updates and daily model retraining via GitHub Actions , no manual intervention required
+- **Model explainability via SHAP**, identifying the pollutants that most influence each prediction (see notebooks/SHAP_Analysis.ipynb)
 
 ## Tech Stack
 
@@ -53,8 +54,9 @@ OpenWeather API  ──raw data──>  Feature Pipeline  ──features──> 
 | Data source | OpenWeather Air Pollution API, OpenWeather Weather API |
 | Feature Store & Model Registry | Hopsworks (free tier) |
 | ML Models | Scikit-learn (Ridge Regression) |
+| Model Explainability | SHAP |
 | Automation / CI-CD | GitHub Actions |
-| Dashboard | Streamlit (Streamlit Community Cloud) |
+| Dashboard | Streamlit (Streamlit Community Cloud), Plotly (AQI gauge) |
 | Language | Python |
 
 ## Repository Structure
@@ -66,6 +68,10 @@ AQI-Predictor/
 ├── hourly_feature_update.py        # Hourly feature ingestion (runs via GitHub Actions)
 ├── training_pipeline.py            # Daily model training script (runs via GitHub Actions)
 ├── requirements.txt
+├── notebooks/
+│   ├── AQI_EDA.ipynb                # Exploratory data analysis
+│   └── SHAP_Analysis.ipynb          # Model explainability (SHAP feature importance)
+├── Assets/                          # Report and README images
 ├── .github/
 │   └── workflows/
 │       ├── hourly_feature.yml      # Triggers hourly_feature_update.py every hour
